@@ -25,7 +25,7 @@ class Self_Attention(nn.Module):
         Q = self.q(x)
         K = self.k(x)
         V = self.v(x)
-        att = Q @ K.transpose(-2,-1) * self._norm_fact
+        att = Q @ K.transpose(-2,-1) * self._norm_fact   #可疑点，原仓库把缩放放在了softmax之后
         att = F.softmax(att,dim=-1)
         out = att @ V
         return out
