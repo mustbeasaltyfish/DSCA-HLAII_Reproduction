@@ -23,7 +23,8 @@ class HLAIIDataset(Dataset):
         if len(pep_seq) > PEP_LEN:
             pep_seq = pep_seq[:PEP_LEN]
         else:
-            pep_seq = pep_seq.ljust(PEP_LEN, '0')
+            # 与 ESM 预计算阶段保持一致：肽段使用 X 做 padding
+            pep_seq = pep_seq.ljust(PEP_LEN, 'X')
 
         if len(hla_seq) > HLA_LEN:
             hla_seq = hla_seq[:HLA_LEN]

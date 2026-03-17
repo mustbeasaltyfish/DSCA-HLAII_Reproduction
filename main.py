@@ -7,15 +7,17 @@ from sklearn.metrics import roc_auc_score
 
 from src.networks       import DSCA_HLAII
 from src.datasets       import HLAIIDataset
-from src.data_utils     import get_hla_name_seq, get_data_mock
+from src.data_utils     import get_hla_name_seq, get_data_real
 from src.early_stopping import EarlyStopping
 
 HLA_SEQ_FILE     = 'data/hla_dict/hla_full_seq_dict.txt'
 TRAIN_FILE       = 'data/small/small_train.txt'
 CHECKPOINT_PATH  = 'checkpoints/checkpoint.pt'
+PEP_ESM_FILE     = 'data/pep/small_train_pep_esm.npy'
+HLA_ESM_FILE     = 'data/hla/small_train_hla_esm.npy'   
 
-BATCH_SIZE   = 16
-NUM_EPOCHS   = 1
+BATCH_SIZE   = 32
+NUM_EPOCHS   = 15
 LR           = 0.01
 WEIGHT_DECAY = 1e-4
 VALID_RATIO  = 0.1
@@ -26,7 +28,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f'使用设备: {device}')
 
 hla_name_seq = get_hla_name_seq(HLA_SEQ_FILE)
-data_list = get_data_mock(hla_name_seq, TRAIN_FILE)
+data_list = get_data_real(hla_name_seq, TRAIN_FILE, PEP_ESM_FILE, HLA_ESM_FILE)
 
 dataset = HLAIIDataset(data_list)
 n_valid = int(len(dataset) * VALID_RATIO)

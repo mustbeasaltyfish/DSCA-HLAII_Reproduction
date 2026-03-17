@@ -80,7 +80,53 @@ def get_data_mock(hla_name_seq,data_file):
     return data_list
 
 
+def get_data_real(hla_name_seq, data_file, pep_esm_file, hla_esm_file):
+    """
+    读取真实 ESMC 预计算嵌入，返回 data_list。
+    
+    pep_esm_file : .npy, shape (N, 32,  1152)
+    hla_esm_file : .npy, shape (N, 2, 100, 1152)
+    """
+    print(f'加载 ESMC 嵌入...')
+    pep_esm_all = np.load(pep_esm_file, mmap_mode='r')  # mmap 避免一次性占用全部内存
+    hla_esm_all = np.load(hla_esm_file, mmap_mode='r')
+    print(f'  pep_esm: {pep_esm_all.shape}')
+    print(f'  hla_esm: {hla_esm_all.shape}')
 
+    data_list = []
+    skipped   = 0
+    idx       = 0
+
+    with open(data_file) as f:
+        for line in f:
+            parts = line.strip().split()
+            if len(parts) != 4:
+                continue
+            pep_seq, alpha, beta, score = parts
+            hla_name = f"{alpha}-{beta}"
+
+            if hla_name not in hla_name_seq:
+                skipped += 1
+                idx += 1
+                continue
+
+            hla_seq = hla_name_seq[hla_name]
+
+            data_list.append((
+                hla_name,
+                pep_seq,
+                hla_seq,
+                float(score),
+                pep_esm_all[idx],   # (32,  1152)
+                hla_esm_all[idx],   # (2, 100, 1152)
+            ))
+            idx += 1
+
+    if skipped:
+        print(f'[警告] 跳过 {skipped} 条找不到 HLA 序列的样本')
+
+    print(f'加载完成，共 {len(data_list)} 条')
+    return data_list
 
 
 

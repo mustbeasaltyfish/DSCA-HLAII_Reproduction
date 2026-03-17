@@ -1,0 +1,30 @@
+# Python cache
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Local secrets
+.env
+preprocess/.env
+
+# Training artifacts and large generated files
+checkpoints/
+data/pep/
+data/hla/
+data/benchmark.txt
+data/benchmark*
+*.npy
+*.npz
+*.pt
+*.pth
+*.ckpt
+*.pkl
+*.safetensors
+*.onnx
+*.h5
+
+# Common experiment outputs
+wandb/
+runs/
+outputs/
+logs/

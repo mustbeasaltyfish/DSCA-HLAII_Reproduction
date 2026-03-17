@@ -1,0 +1,10 @@
+# DSCA-HLAII_Reproduction 依赖
+# 根据 main.py, src/*.py, test_dataloader.py 分析得出
+# 安装: pip install -r requirements.txt
+
+# PyTorch GPU 版 (CUDA 12.8，支持 RTX 5090)
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch>=2.0.0
+
+numpy>=1.19.0
+scikit-learn>=0.24.0
