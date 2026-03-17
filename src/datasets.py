@@ -29,7 +29,7 @@ class HLAIIDataset(Dataset):
         if len(hla_seq) > HLA_LEN:
             hla_seq = hla_seq[:HLA_LEN]
         else:
-            hla_seq = hla_seq.ljust(HLA_LEN, '0')
+            hla_seq = hla_seq.ljust(HLA_LEN, 'X')
 
         def to_one_hot(seq,length):
             indices = [ACIDS.index(c) if c in ACIDS else 1 for c in seq]
