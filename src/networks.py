@@ -31,17 +31,15 @@ class Self_Attention(nn.Module):
         return out
 
 class ResConv1D(nn.Module):
-    #局部特征提取使用
+    # 与上游仓库对齐：使用无 padding 的局部卷积
 
     def __init__(self,dim,kernel_size):
         super().__init__()
-        self.conv = nn.Conv1d(dim,dim,kernel_size,padding=kernel_size//2)    
-        self.norm = nn.BatchNorm1d(dim)
+        self.conv = nn.Conv1d(dim,dim,kernel_size)
 
     def forward(self,x):
-        out = self.conv(x.transpose(1,2)) #卷积维度修改
-        out = self.norm(out).transpose(1,2)
-        return torch.relu(out+x)
+        out = self.conv(x.transpose(1,2))
+        return out.transpose(1,2)
 
 class TransformerEncoder(nn.Module):
     
@@ -152,8 +150,8 @@ class RepresentationExtractor(nn.Module):
     输出：
         pep_global : (B, 32,  384)   肽段全局特征
         hla_global : (B, 200, 384)   HLA  全局特征
-        pep_local  : (B, 32,  384)   肽段局部特征
-        hla_local  : (B, 200, 384)   HLA  局部特征
+        pep_local  : (B, 24,  384)   肽段局部特征
+        hla_local  : (B, 196, 384)   HLA  局部特征
     """
     def __init__(self):
         super().__init__()
@@ -176,8 +174,8 @@ class DualStreamCrossAttention(nn.Module):
     输入：
         pep_global : (B, 32,  384)   肽段全局特征
         hla_global : (B, 200, 384)   HLA  全局特征
-        pep_local  : (B, 32,  384)   肽段局部特征
-        hla_local  : (B, 200, 384)   HLA  局部特征
+        pep_local  : (B, 24,  384)   肽段局部特征
+        hla_local  : (B, 196, 384)   HLA  局部特征
     """
     def __init__(self):
         super().__init__()
