@@ -1,6 +1,7 @@
 import argparse
 import csv
 import logging
+import math
 import os
 import random
 from datetime import datetime
@@ -21,6 +22,9 @@ from src.networks import DSCA_HLAII
 def parse_args():
     parser = argparse.ArgumentParser(description="Train DSCA-HLAII")
     parser.add_argument("--config", default="config/train.yaml", help="Path to YAML config file")
+    parser.add_argument("--mode", choices=("train", "predict_core"), default="train")
+    parser.add_argument("--checkpoint", help="Checkpoint path used by predict_core mode")
+    parser.add_argument("--output", help="Output CSV path used by predict_core mode")
     return parser.parse_args()
 
 
@@ -99,9 +103,10 @@ def setup_logger(log_path):
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-    file_handler = logging.FileHandler(log_path, encoding="utf-8")
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+    if log_path is not None:
+        file_handler = logging.FileHandler(log_path, encoding="utf-8")
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
 
     return logger
 
@@ -150,14 +155,10 @@ def save_checkpoint(path, state):
     torch.save(state, path)
 
 
-def build_dataloaders(config):
+def load_data_list(config):
     data_cfg = get_required(config, "data")
-    batch_size = int(get_required(config, "train.batch_size"))
-    valid_ratio = float(get_required(config, "train.valid_ratio"))
-    seed = int(get_required(config, "run.seed"))
-
     hla_name_seq = get_hla_name_seq(data_cfg["hla_seq_file"])
-    data_list = get_data_real(
+    return get_data_real(
         hla_name_seq,
         data_cfg["train_file"],
         data_cfg["pep_esm_file"],
@@ -165,6 +166,14 @@ def build_dataloaders(config):
         data_cfg["hla_esm_names_file"],
     )
 
+
+def build_dataloaders(config):
+    data_cfg = get_required(config, "data")
+    batch_size = int(get_required(config, "train.batch_size"))
+    valid_ratio = float(get_required(config, "train.valid_ratio"))
+    seed = int(get_required(config, "run.seed"))
+
+    data_list = load_data_list(config)
     dataset = HLAIIDataset(data_list)
     n_valid = int(len(dataset) * valid_ratio)
     n_train = len(dataset) - n_valid
@@ -180,13 +189,10 @@ def build_dataloaders(config):
     return train_loader, valid_loader, n_train, n_valid
 
 
-def main():
-    args = parse_args()
-    config = load_config(args.config)
+def train_main(config, args):
     paths = prepare_run_dir(config)
     logger = setup_logger(paths["log_path"])
     save_config_snapshot(config, paths["config_snapshot_path"])
-
     seed = int(get_required(config, "run.seed"))
     set_seed(seed)
 
@@ -309,6 +315,122 @@ def main():
             break
 
     logger.info("训练完成")
+
+
+def resolve_predict_paths(config, checkpoint_path, output_path):
+    run_cfg = get_required(config, "run")
+    run_name = run_cfg.get("name")
+    output_root = get_required(config, "run.output_root")
+
+    if checkpoint_path is None:
+        if not run_name:
+            raise ValueError("predict_core 模式下，如果未显式提供 --checkpoint，则 config.run.name 必须存在")
+        checkpoint_path = os.path.join(output_root, run_name, "checkpoints", "best.pt")
+
+    if output_path is None:
+        checkpoint_dir = os.path.dirname(checkpoint_path)
+        run_dir = os.path.dirname(checkpoint_dir)
+        output_path = os.path.join(run_dir, "core_predictions.csv")
+
+    return checkpoint_path, output_path
+
+
+def write_core_predictions(output_path, data_list, scores, core_positions):
+    cutoff = 1.0 - math.log(500, 50000)
+    output_dir = os.path.dirname(output_path)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+
+    with open(output_path, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow([
+            "PeptideSeq",
+            "HLA_Alpha",
+            "HLA_Beta",
+            "Score",
+            "Presentation",
+            "CoreStart",
+            "BindingCore",
+        ])
+
+        for sample, score, core_pos in zip(data_list, scores, core_positions):
+            hla_name, peptide, _, _, _, _ = sample
+            hla_alpha, hla_beta = hla_name.split("-", 1)
+            score = float(score)
+            core_pos = int(core_pos)
+            presentation = "true" if score >= cutoff else "false"
+
+            if presentation == "true" and peptide:
+                core_pos = min(core_pos, len(peptide) - 1)
+                binding_core = peptide[core_pos:core_pos + 9]
+                core_start = core_pos
+            else:
+                binding_core = "NaN!"
+                core_start = -1
+
+            writer.writerow([
+                peptide,
+                hla_alpha,
+                hla_beta,
+                f"{score:.6f}",
+                presentation,
+                core_start,
+                binding_core,
+            ])
+
+
+def predict_core_main(config, args):
+    logger = setup_logger(None)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    checkpoint_path, output_path = resolve_predict_paths(config, args.checkpoint, args.output)
+
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(f"checkpoint 不存在: {checkpoint_path}")
+
+    seed = int(get_required(config, "run.seed"))
+    set_seed(seed)
+
+    logger.info(f"使用配置文件: {args.config}")
+    logger.info(f"使用设备: {device}")
+    logger.info(f"加载 checkpoint: {checkpoint_path}")
+
+    data_list = load_data_list(config)
+    batch_size = int(get_required(config, "train.batch_size"))
+    data_loader = DataLoader(HLAIIDataset(data_list), batch_size=batch_size, shuffle=False)
+    logger.info(f"预测样本数: {len(data_list)}")
+
+    model = DSCA_HLAII().to(device)
+    ckpt = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(ckpt["model_state"])
+    model.eval()
+
+    all_scores = []
+    all_core_positions = []
+    with torch.no_grad():
+        for (pep_oh, pep_esm, hla_oh, hla_esm), _ in data_loader:
+            pep_oh = pep_oh.to(device)
+            pep_esm = pep_esm.to(device)
+            hla_oh = hla_oh.to(device)
+            hla_esm = hla_esm.to(device)
+
+            scores = model(pep_oh, pep_esm, hla_oh, hla_esm, core=False).squeeze(1)
+            core_scores = model(pep_oh, pep_esm, hla_oh, hla_esm, core=True)
+            core_positions = core_scores.argmax(dim=-1)
+
+            all_scores.extend(scores.cpu().numpy())
+            all_core_positions.extend(core_positions.cpu().numpy())
+
+    write_core_predictions(output_path, data_list, all_scores, all_core_positions)
+    logger.info(f"预测结果已保存到: {output_path}")
+
+
+def main():
+    args = parse_args()
+    config = load_config(args.config)
+    if args.mode == "train":
+        train_main(config, args)
+    else:
+        predict_core_main(config, args)
 
 
 if __name__ == "__main__":

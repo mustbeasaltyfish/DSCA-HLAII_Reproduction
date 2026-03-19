@@ -237,10 +237,12 @@ class DSCA_HLAII(nn.Module):
         self.dual_stream_cross_attention = DualStreamCrossAttention()
         self.predictor = Predictor()
 
-    def forward(self,pep_one_hot,pep_esm,hla_one_hot,hla_esm):
+    def forward(self,pep_one_hot,pep_esm,hla_one_hot,hla_esm,core=False):
         pep_feature,hla_feature = self.residue_embedding(pep_one_hot,pep_esm,hla_one_hot,hla_esm)
         pep_global,hla_global,pep_local,hla_local = self.representation_extractor(pep_feature,hla_feature)
         pep_feature,hla_feature = self.dual_stream_cross_attention(pep_global,hla_global,pep_local,hla_local)
+        if core:
+            return torch.mean(pep_feature, dim=-1)
         score = self.predictor(pep_feature,hla_feature)
         return score
 
@@ -255,11 +257,11 @@ if __name__ == '__main__':
         torch.zeros(B, 2, 100, 1152),
     )
 
-    print(f"output shape : {out.shape}")   # 期望 (4, 1)
-    print(f"dtype        : {out.dtype}")   # 期望 torch.float32
+    print(f"output shape : {out.shape}")   
+    print(f"dtype        : {out.dtype}")   
     print(f"值域         : [{out.min():.3f}, {out.max():.3f}]")
 
-    # 顺手统计参数量
+
     total = sum(p.numel() for p in model.parameters())
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"总参数量     : {total:,}")
