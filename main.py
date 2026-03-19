@@ -16,12 +16,12 @@ CHECKPOINT_PATH  = 'checkpoints/checkpoint.pt'
 PEP_ESM_FILE     = 'data/pep/small_train_pep_esm.npy'
 HLA_ESM_FILE     = 'data/hla/small_train_hla_esm.npy'   
 
-BATCH_SIZE   = 32
-NUM_EPOCHS   = 15
+BATCH_SIZE   = 64
+NUM_EPOCHS   = 40
 LR           = 0.01
 WEIGHT_DECAY = 1e-4
 VALID_RATIO  = 0.1
-PATIENCE     = 7
+PATIENCE     = 9
 
 os.makedirs('checkpoints', exist_ok=True)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

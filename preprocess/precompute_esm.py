@@ -25,13 +25,12 @@ load_dotenv()
 from huggingface_hub import login
 login(token=os.getenv('HF_TOKEN'))   
 
-DATA_FILE = 'data/small/small_train.txt'
+DATA_FILE = 'data/medium/medium_train_100k.txt'
 HLA_SEQ_FILE = 'data/hla_dict/hla_full_seq_dict.txt'
-PEP_OUT = "data/pep/small_train_pep_esm.npy"
-HLA_OUT = "data/hla/small_train_hla_esm.npy"
+PEP_OUT = "data/pep/medium_train_100k_pep_esm.npy"
+HLA_OUT = "data/hla/medium_train_100k_hla_esm.npy"
 PEP_LEN = 32
 HLA_PART_LEN = 100
-BATCH_SIZE = 50
 
 os.makedirs("data/pep", exist_ok=True)
 os.makedirs("data/hla", exist_ok=True)
@@ -81,29 +80,35 @@ def get_esm_embedding(seq, max_len):
         emb = torch.cat([emb,pad],dim = 0)
     return emb.cpu().numpy().astype(np.float32)
 
-print("开始计算肽段 ESMC embedding...")
-pep_embs = np.zeros((N,PEP_LEN,1152),dtype=np.float32)
+
+if os.path.exists(PEP_OUT):
+    print(f"肽段嵌入已存在，跳过计算")
+else:
+    print("开始计算肽段 ESMC embedding...")
+    pep_embs = np.zeros((N,PEP_LEN,1152),dtype=np.float32)
+    with torch.no_grad():
+        for i in tqdm(range(N)):
+            pep_embs[i] = get_esm_embedding(peptides[i], PEP_LEN)
+    np.save(PEP_OUT, pep_embs)
+    print(f'肽段嵌入已保存: {PEP_OUT}, shape={pep_embs.shape}')
 
 
-with torch.no_grad():
-    for i in tqdm(range(N)):
-        pep_embs[i] = get_esm_embedding(peptides[i], PEP_LEN)
+if os.path.exists(HLA_OUT):
+    print(f"HLA嵌入已存在，跳过计算")
+else:
+    print("开始计算HLA ESMC embedding...")
+    hla_embs = np.zeros((N, 2, HLA_PART_LEN, 1152), dtype=np.float32)
+    with torch.no_grad():
+            for i in tqdm(range(N)):
+                seq = hla_seqs[i]
+                part1 = seq[:HLA_PART_LEN]
+                part2 = seq[HLA_PART_LEN:HLA_PART_LEN*2]
+                hla_embs[i, 0] = get_esm_embedding(part1, HLA_PART_LEN)
+                hla_embs[i, 1] = get_esm_embedding(part2, HLA_PART_LEN)
+    np.save(HLA_OUT, hla_embs)
+    print(f'HLA 嵌入已保存: {HLA_OUT}, shape={hla_embs.shape}')
 
-np.save(PEP_OUT, pep_embs)
-print(f'肽段嵌入已保存: {PEP_OUT}, shape={pep_embs.shape}')
 
-hla_embs = np.zeros((N, 2, HLA_PART_LEN, 1152), dtype=np.float32)
-with torch.no_grad():
-    for i in tqdm(range(N)):
-        seq = hla_seqs[i]
-        part1 = seq[:HLA_PART_LEN]
-        part2 = seq[HLA_PART_LEN:HLA_PART_LEN*2]
-        hla_embs[i, 0] = get_esm_embedding(part1, HLA_PART_LEN)
-        hla_embs[i, 1] = get_esm_embedding(part2, HLA_PART_LEN)
-
-np.save(HLA_OUT, hla_embs)
-print(f'HLA 嵌入已保存: {HLA_OUT}, shape={hla_embs.shape}')
-
-pep_gb = pep_embs.nbytes / 1e9
-hla_gb = hla_embs.nbytes / 1e9
+pep_gb = os.path.getsize(PEP_OUT) / 1e9 if os.path.exists(PEP_OUT) else 0
+hla_gb = os.path.getsize(HLA_OUT) / 1e9 if os.path.exists(HLA_OUT) else 0
 print(f'\n磁盘占用: 肽段 {pep_gb:.2f} GB + HLA {hla_gb:.2f} GB = {pep_gb+hla_gb:.2f} GB')
