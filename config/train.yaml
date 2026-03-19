@@ -6,10 +6,10 @@ run:
 
 data:
   hla_seq_file: data/hla_dict/hla_full_seq_dict.txt
-  train_file: data/small/small_train.txt
-  pep_esm_file: data/pep/small_train_pep_esm.npy
-  hla_esm_file: data/hla/small_train_hla_unique_esm.npy
-  hla_esm_names_file: data/hla/small_train_hla_unique_names.npy
+  train_file: data/medium/medium_train_100k.txt
+  pep_esm_file: data/pep/medium_train_100k_pep_esm.npy
+  hla_esm_file: data/hla/medium_train_100k_hla_unique_esm.npy
+  hla_esm_names_file: data/hla/medium_train_100k_hla_unique_names.npy
 
 train:
   batch_size: 64
