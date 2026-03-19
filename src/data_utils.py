@@ -80,18 +80,27 @@ def get_data_mock(hla_name_seq,data_file):
     return data_list
 
 
-def get_data_real(hla_name_seq, data_file, pep_esm_file, hla_esm_file):
+def get_data_real(hla_name_seq, data_file, pep_esm_file, hla_esm_file, hla_esm_names_file=None):
     """
     读取真实 ESMC 预计算嵌入，返回 data_list。
     
     pep_esm_file : .npy, shape (N, 32,  1152)
-    hla_esm_file : .npy, shape (N, 2, 100, 1152)
+    hla_esm_file : .npy, shape (N, 2, 100, 1152) 或 (M, 2, 100, 1152)
+    hla_esm_names_file : 可选，若提供则 hla_esm_file 按唯一 hla_name 存储
     """
     print(f'加载 ESMC 嵌入...')
     pep_esm_all = np.load(pep_esm_file, mmap_mode='r')  # mmap 避免一次性占用全部内存
-    hla_esm_all = np.load(hla_esm_file, mmap_mode='r')
     print(f'  pep_esm: {pep_esm_all.shape}')
-    print(f'  hla_esm: {hla_esm_all.shape}')
+
+    hla_esm_all = np.load(hla_esm_file, mmap_mode='r')
+    if hla_esm_names_file is None:
+        hla_esm_index = None
+        print(f'  hla_esm(sample-wise): {hla_esm_all.shape}')
+    else:
+        hla_esm_names = np.load(hla_esm_names_file, allow_pickle=False)
+        hla_esm_index = {str(name): idx for idx, name in enumerate(hla_esm_names.tolist())}
+        print(f'  hla_esm(unique): {hla_esm_all.shape}')
+        print(f'  hla_esm_names: {hla_esm_names.shape}')
 
     data_list = []
     skipped   = 0
@@ -111,6 +120,12 @@ def get_data_real(hla_name_seq, data_file, pep_esm_file, hla_esm_file):
                 continue
 
             hla_seq = hla_name_seq[hla_name]
+            if hla_esm_index is None:
+                hla_esm = hla_esm_all[idx]
+            else:
+                if hla_name not in hla_esm_index:
+                    raise KeyError(f'HLA 唯一嵌入缺少 {hla_name}，请重新生成 {hla_esm_file} / {hla_esm_names_file}')
+                hla_esm = hla_esm_all[hla_esm_index[hla_name]]
 
             data_list.append((
                 hla_name,
@@ -118,7 +133,7 @@ def get_data_real(hla_name_seq, data_file, pep_esm_file, hla_esm_file):
                 hla_seq,
                 float(score),
                 pep_esm_all[idx],   # (32,  1152)
-                hla_esm_all[idx],   # (2, 100, 1152)
+                hla_esm,            # (2, 100, 1152)
             ))
             idx += 1
 
@@ -127,6 +142,5 @@ def get_data_real(hla_name_seq, data_file, pep_esm_file, hla_esm_file):
 
     print(f'加载完成，共 {len(data_list)} 条')
     return data_list
-
 
 
