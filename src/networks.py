@@ -31,7 +31,7 @@ class Self_Attention(nn.Module):
         return out
 
 class ResConv1D(nn.Module):
-    # 与上游仓库对齐：使用无 padding 的局部卷积
+    # 与原仓库对齐：使用无 padding 的局部卷积
 
     def __init__(self,dim,kernel_size):
         super().__init__()
@@ -84,7 +84,7 @@ class CrossAttention(nn.Module):
         V = self.v(y_local)
         att = Q @ K.transpose(-2,-1) * self._norm_fact
         att = F.softmax(att,dim=-1)
-        out = torch.einsum('bij,bkv->biv',att,V)
+        out = torch.einsum('bij,bkv->biv',att,V) #值得和老师讨论的细节
         out = F.normalize(out,p=2,dim=-1)
         return out+x_global
 
